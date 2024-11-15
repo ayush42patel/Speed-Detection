@@ -1,0 +1,110 @@
+import cv2
+import time
+import numpy as np
+from ultralytics import YOLO
+
+# Load YOLOv8 model
+def load_yolov8():
+    model = YOLO('yolov8n.pt')  # Load YOLOv8 nano model (you can change to yolov8m or yolov8l for better accuracy)
+    return model
+
+# Function to detect vehicles using YOLOv8
+def detect_vehicles_yolo(model, frame):
+    # Perform YOLOv8 detection
+    results = model(frame, stream=True)  # Stream=True returns the inference results frame-by-frame
+    
+    vehicles = []
+    
+    for result in results:
+        boxes = result.boxes  # Bounding boxes
+        for box in boxes:
+            class_id = int(box.cls[0])  # Class ID of detected object
+            conf = box.conf[0]  # Confidence score
+            x1, y1, x2, y2 = map(int, box.xyxy[0])  # Bounding box coordinates
+            
+            # Filter for vehicles (YOLOv8 class IDs for vehicles in COCO dataset: car=2, bus=5, truck=7)
+            if class_id in [2, 5, 7] and conf > 0.5:
+                vehicles.append(((x1, y1, x2, y2), conf))
+    
+    return vehicles
+
+# Calculate speed based on distance and time
+def calculate_speed(previous_position, current_position, time_diff, fps):
+    if previous_position is None:
+        return 0  # No previous position to compare
+
+    # Calculate Euclidean distance between the previous and current position
+    distance = np.linalg.norm(np.array(previous_position) - np.array(current_position))
+    
+    # Convert frame-based speed to real-world speed estimation
+    speed = distance / (time_diff * fps)
+    
+    return speed
+
+# Main function to run vehicle detection and speed estimation
+def vehicle_speed_detection():
+    # Load YOLOv8 model
+    model = load_yolov8()
+
+    # Open video capture (you can use 0 for a live camera feed)
+    cap = cv2.VideoCapture("video/test2.mp4")
+
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        return
+
+    # Initialize variables to store previous vehicle positions and speed calculation
+    previous_positions = {}
+    previous_times = {}
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            print("End of video or failed to grab frame.")
+            break
+
+        start_time = time.time()
+
+        # Detect vehicles using YOLOv8
+        detected_vehicles = detect_vehicles_yolo(model, frame)
+
+        # Process each detected vehicle
+        for idx, (box, confidence) in enumerate(detected_vehicles):
+            x1, y1, x2, y2 = box
+            current_position = (x1 + (x2 - x1) // 2, y1 + (y2 - y1) // 2)  # Center of the bounding box
+            
+            # Assign a unique ID to each detected vehicle based on position
+            vehicle_id = idx  # This can be replaced with more complex tracking logic
+
+            # Calculate speed
+            if vehicle_id in previous_positions:
+                time_diff = time.time() - previous_times[vehicle_id]
+                speed = calculate_speed(previous_positions[vehicle_id], current_position, time_diff, fps)
+            else:
+                speed = 0  # Not enough data to calculate speed
+            
+            # Update the previous position and time for the vehicle
+            previous_positions[vehicle_id] = current_position
+            previous_times[vehicle_id] = time.time()
+
+            # Draw the bounding box and speed on the frame
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, f"Speed: {speed:.2f} units/s", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        # Show the processed frame
+        cv2.imshow("Vehicle Speed Detection", frame)
+
+        # Stop the loop on 'q' key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        # Calculate the time taken to process the frame
+        processing_time = time.time() - start_time
+        print(f"Frame processing time: {processing_time:.4f} seconds")
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    vehicle_speed_detection()

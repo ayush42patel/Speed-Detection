@@ -1,0 +1,14 @@
+Virtual mouse using hand gesture recognition
+vehicle speed detection
+personal chat bot
+Bank Management system
+Mental stress detection
+real time facial expression
+image to text and text to image convertor (image recognition)
+Chat gpt with python
+traffic management ai Ml
+
+# vehicle speed detection problems
+paas agar ho vehicle to kaise detect hongi
+light kam ho to kaise detect hongi
+applicable kaise hoga
